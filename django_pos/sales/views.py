@@ -12,7 +12,10 @@ from products.models import Product
 from weasyprint import HTML, CSS
 from .models import Sale, SaleDetail
 import json
+from django.db import transaction
+import logging
 
+logger = logging.getLogger(__name__)
 
 def is_ajax(request):
     return request.META.get('HTTP_X_REQUESTED_WITH') == 'XMLHttpRequest'
@@ -34,51 +37,45 @@ def sales_add_view(request):
         "customers": [c.to_select2() for c in Customer.objects.all()]
     }
 
-    if request.method == 'POST':
-        if is_ajax(request=request):
-            # Save the POST arguments
-            data = json.load(request)
+    if request.method == 'POST' and is_ajax(request=request):
+        data = json.loads(request.body.decode('utf-8'))
 
-            sale_attributes = {
-                "customer": Customer.objects.get(id=int(data['customer'])),
-                "sub_total": float(data["sub_total"]),
-                "grand_total": float(data["grand_total"]),
-                "tax_amount": float(data["tax_amount"]),
-                "tax_percentage": float(data["tax_percentage"]),
-                "amount_payed": float(data["amount_payed"]),
-                "amount_change": float(data["amount_change"]),
-            }
-            try:
-                # Create the sale
-                new_sale = Sale.objects.create(**sale_attributes)
-                new_sale.save()
-                # Create the sale details
-                products = data["products"]
+        sale_attributes = {
+            "customer": Customer.objects.get(id=int(data['customer'])),
+            "sub_total": float(data["sub_total"]),
+            "grand_total": float(data["grand_total"]),
+            "tax_amount": float(data["tax_amount"]),
+            "tax_percentage": float(data["tax_percentage"]),
+            "amount_payed": float(data["amount_payed"]),
+            "amount_change": float(data["amount_change"]),
+        }
 
-                for product in products:
-                    detail_attributes = {
-                        "sale": Sale.objects.get(id=new_sale.id),
-                        "product": Product.objects.get(id=int(product["id"])),
-                        "price": product["price"],
-                        "quantity": product["quantity"],
-                        "total_detail": product["total_product"]
-                    }
-                    sale_detail_new = SaleDetail.objects.create(
-                        **detail_attributes)
-                    sale_detail_new.save()
+        try:
+            # Create the sale
+            new_sale = Sale.objects.create(**sale_attributes)
 
-                print("Sale saved")
+            # Create the sale details
+            products = data["products"]
 
-                messages.success(
-                    request, 'Sale created successfully!', extra_tags="success")
+            for product in products:
+                detail_attributes = {
+                    "sale": new_sale,
+                    "product": Product.objects.get(id=int(product["id"])),
+                    "price": float(product["price"]),
+                    "quantity": int(product["quantity"]),
+                    "total_detail": float(product["total_product"])
+                }
+                SaleDetail.objects.create(**detail_attributes)
 
-            except Exception as e:
-                messages.success(
-                    request, 'There was an error during the creation!', extra_tags="danger")
+            messages.success(request, 'Sale created successfully!', extra_tags="success")
+            return HttpResponse(status=200)
 
-        return redirect('sales:sales_list')
+        except Exception as e:
+            messages.error(request, f'There was an error during the creation! Error: {str(e)}', extra_tags="danger")
+            return HttpResponse(status=500)
 
     return render(request, "sales/sales_add.html", context=context)
+
 
 
 @login_required(login_url="/accounts/login/")

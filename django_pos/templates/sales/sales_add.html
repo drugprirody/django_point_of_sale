@@ -472,9 +472,11 @@
 
         // Send the sale via ajax
         
-        $('.saleForm').on('submit', function (e) {  
+        $('.saleForm').on('submit', function (e) {
+            e.preventDefault(); // Prevent the default form submission
+        
             // Only allow sending if we have at least one product
-            if (sale.items.products.length === 0 ) {
+            if (sale.items.products.length === 0) {
                 Swal.fire({
                     title: 'The sale must have at least 1 product',
                     text: 'Search a product and add it to the sale',
@@ -482,7 +484,7 @@
                 });
                 return false;
             };
-            
+        
             // Only allow sending if the paid amount is equal or greater than the total
             if ($('[name="amount_payed"]').val() < $('[name="grand_total"]').val()) {
                 Swal.fire({
@@ -491,56 +493,48 @@
                 });
                 return false;
             }
-
-            // Agregamos los datos faltantes al objeto sales
+        
+            // Add missing data to the sale object
             sale.items.customer = $('select[name="customer"]').val();
-            console.log("Customer: " + sale.items.customer)
-            sale.items.sub_total = $('input[name="sub_total"]').val(); 
+            sale.items.sub_total = $('input[name="sub_total"]').val();
             sale.items.grand_total = $('input[name="grand_total"]').val();
-            sale.items.tax_amount = $('input[name="tax_amount"]').val(); 
+            sale.items.tax_amount = $('input[name="tax_amount"]').val();
             sale.items.tax_percentage = $('input[name="tax_percentage"]').val();
-            sale.items.amount_payed = $('input[name="amount_payed"]').val(); 
-            sale.items.amount_change = roundTo($('input[name="amount_payed"]').val() - $('input[name="grand_total"]').val(), 2); 
-
-            console.log("Sale:")
-            console.log(sale.items)
-
+            sale.items.amount_payed = $('input[name="amount_payed"]').val();
+            sale.items.amount_change = roundTo($('input[name="amount_payed"]').val() - $('input[name="grand_total"]').val(), 2);
+        
             // Validate the csrf_token
             var csrftoken = jQuery("[name=csrfmiddlewaretoken]").val();
-
-            function csrfSafeMethod(method) {
-            // these HTTP methods do not require CSRF protection
-            return (/^(GET|HEAD|OPTIONS|TRACE)$/.test(method));
-            }
+        
             $.ajaxSetup({
                 beforeSend: function (xhr, settings) {
-                    if (!csrfSafeMethod(settings.type) && !this.crossDomain) {
+                    if (!/^(GET|HEAD|OPTIONS|TRACE)$/.test(settings.type) && !this.crossDomain) {
                         xhr.setRequestHeader("X-CSRFToken", csrftoken);
                     }
                 }
             });
+        
             $.ajax({
                 url: "{% url 'sales:sales_add' %}",
                 type: "POST",
-                // We need to convert the JS object sale to string
-                data: JSON.stringify(sale.items), 
-                datatype: "json",
-                processData: false,
-                contentType: false,
+                data: JSON.stringify(sale.items),
+                contentType: "application/json",
                 success: function (data) {
-                    console.log("Ajax OK")
+                    Swal.fire({
+                        title: 'Sale created successfully!',
+                        icon: 'success',
+                    }).then(() => {
+                        window.location.href = "{% url 'sales:sales_list' %}";
+                    });
                 },
                 error: function (error) {
-                    console.log("Ajax error");
-                    console.log(error);
+                    Swal.fire({
+                        title: 'There was an error during the creation!',
+                        text: error.responseText,
+                        icon: 'error',
+                    });
                 },
-            }).done(function (data){
-                console.log ("Ajax Done");
-            }).fail(function (data, jqXHR, textStatus, errorThrown){
-                console.log ("Ajax Fail");
-                alert(textStatus + ':' + errorThrown);
             });
-            
         });
         
 </script>
